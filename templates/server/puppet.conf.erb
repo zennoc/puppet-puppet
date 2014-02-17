@@ -5,7 +5,7 @@
   logdir      = <%= scope.lookupvar('puppet::log_dir') %>
   rundir      = <%= scope.lookupvar('puppet::run_dir') %>
   templatedir = <%= scope.lookupvar('puppet::template_dir') %>
-  ssldir      = $vardir/ssl
+  ssldir      = <%= scope.lookupvar('puppet::ssl_dir') %>
   usecacheonfailure = true
   user = <%= scope.lookupvar('puppet::process_user_server') %>
   group = <%= scope.lookupvar('puppet::process_user_server') %>
@@ -19,6 +19,7 @@
   privatekeydir = $ssldir/private_keys { group = service }
   hostprivkey = $privatekeydir/$certname.pem { mode = 640 }
 <% end -%>
+  masterport = <%= scope.lookupvar('puppet::port') %>
 
 <% if scope.lookupvar('puppet::params::major_version') == "0.2" -%># [puppet]<% else -%># [user]<% end %>
 
@@ -33,9 +34,11 @@
   listen = <%= scope.lookupvar('puppet::bool_listen') %>
   runinterval = <%= scope.lookupvar('puppet::runinterval') %>
   localconfig = $vardir/localconfig
+<% if scope.lookupvar('puppet::master_environment') != '' -%>
+  environment = <%= scope.lookupvar('puppet::master_environment') %>
+<% end -%> 
 
 <% if scope.lookupvar('puppet::params::major_version') == "0.2" -%>[puppetmasterd]<% else -%>[master]<% end %>
-  masterport = <%= scope.lookupvar('puppet::port') %>
 <% if scope.lookupvar('puppet::bindaddress') != '' -%>
   bindaddress = <%= scope.lookupvar('puppet::bindaddress') %>
 <% end -%>

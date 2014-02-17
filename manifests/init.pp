@@ -16,7 +16,10 @@
 #   if $domain fact is blank
 #
 # [*environment*]
-#   The default environmentset in puppet.conf. Default: production
+#   The default environment set in puppet.conf. Default: production
+#
+# [*master_environment*]
+#   The default environment set in puppet.conf in the agent section for the master. Default: production
 #
 # [*allow*]
 #   The allow directive in the server file namespaceauth.conf.
@@ -127,6 +130,8 @@
 # [*template_rack_config*]
 #
 # [*run_dir*]
+#
+# [*ssl_dir*]
 #
 # [*reporturl*]
 #
@@ -359,6 +364,7 @@ class puppet (
   $mode                = params_lookup( 'mode' ),
   $server              = params_lookup( 'server' ),
   $environment         = params_lookup( 'environment' ),
+  $master_environment  = params_lookup( 'master_environment' ),
   $allow               = params_lookup( 'allow' ),
   $bindaddress         = params_lookup( 'bindaddress' ),
   $listen              = params_lookup( 'listen' ),
@@ -404,6 +410,7 @@ class puppet (
   $template_rack_config = params_lookup( 'template_rack_config' ),
   $template_cron       = params_lookup( 'template_cron' ),
   $run_dir             = params_lookup( 'run_dir' ),
+  $ssl_dir             = params_lookup( 'ssl_dir' ),
   $reporturl           = params_lookup( 'reporturl' ),
   $my_class            = params_lookup( 'my_class' ),
   $source              = params_lookup( 'source' ),
@@ -530,17 +537,6 @@ class puppet (
         },
       },
     },
-  }
-
-  # Log dir needs to belong to puppet if running with passenger
-  $real_log_dir_owner = $puppet::bool_passenger ? {
-    true  => $puppet::process_user_server,
-    false => $puppet::config_file_owner,
-  }
-
-  $real_log_dir_group = $puppet::bool_passenger ? {
-    true  => $puppet::process_user_server,
-    false => $puppet::config_file_group,
   }
 
   $manage_service_ensure = $puppet::bool_disable ? {
@@ -732,8 +728,8 @@ class puppet (
     ensure  => $puppet::manage_directory,
     path    => $puppet::log_dir,
     mode    => '0750',
-    owner   => $puppet::real_log_dir_owner,
-    group   => $puppet::real_log_dir_group,
+    owner   => $puppet::process_user_server,
+    group   => $puppet::process_user_server,
     require => Package['puppet'],
     audit   => $puppet::manage_audit,
   }
