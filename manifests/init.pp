@@ -400,6 +400,7 @@ class puppet (
   $version_puppetdb_terminus  = params_lookup( 'version_puppetdb_terminus' ),
   $service_server_autorestart = params_lookup( 'service_server_autorestart' ),
   $dns_alt_names       = params_lookup( 'dns_alt_names' ),
+  $certname            = params_lookup( 'certname' ),
   $client_daemon_opts  = params_lookup( 'client_daemon_opts' ),
   $mysql_conn_package  = params_lookup( 'mysql_conn_package' ),
   $basedir             = params_lookup( 'basedir' ),
@@ -556,7 +557,7 @@ class puppet (
     default =>  $puppet::bool_absent ? {
       true    => 'stopped',
       default => $puppet::bool_passenger ? {
-        true  => undef,
+        true  => 'stopped',
         false => 'running',
       },
     },
@@ -651,6 +652,11 @@ class puppet (
     default   => template($puppet::template_fileserver),
   }
 
+  $manage_log_dir_owner = $puppet::mode ? {
+    server => $puppet::process_user_server,
+    client => $puppet::process_user,
+  }
+
   $version_puppet = split($::puppetversion, '[.]')
   $version_major = $version_puppet[0]
 
@@ -728,8 +734,8 @@ class puppet (
     ensure  => $puppet::manage_directory,
     path    => $puppet::log_dir,
     mode    => '0750',
-    owner   => $puppet::process_user_server,
-    group   => $puppet::process_user_server,
+    owner   => $puppet::manage_log_dir_owner,
+    group   => $puppet::manage_log_dir_owner,
     require => Package['puppet'],
     audit   => $puppet::manage_audit,
   }
