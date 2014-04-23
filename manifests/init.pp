@@ -7,6 +7,14 @@
 #
 # Module specific parameters
 #
+# [*enc_backup*]
+#   Boolean. Default: false
+#   If set to true the enc external_nodes script is wrapped by another script
+#   that caches successfull nodes yaml files and uses them in case
+#   of failure of the enc. Use this as a simple and automatic failover
+#   method when the ENC is down (in this case the script returns the last
+#   valid yaml file retrieved from the enc
+#
 # [*mode*]
 #   Define if to install just the client (mode = client) or both server
 #   and client (mode = server ). Default: client
@@ -177,8 +185,8 @@
 #
 # [*service_autorestart*]
 #   Automatically restarts the puppet service when there is a change in
-#   configuration files. Default: true, Set to false if you don't want to
-#   automatically restart the service.
+#   configuration files. Default: false, to avoid race condition of restartin
+#   puppet during a puppet run.  Setting to true may create unpredictable results
 #
 # [*version*]
 #   The package version, used in the ensure parameter of package type.
@@ -305,6 +313,9 @@
 # [*config_file_init*]
 #   Path of configuration file sourced by init script
 #
+# [*config_file_init_template*]
+#   Template for the init config file
+#
 # [*pid_file*]
 #   Path of pid file. Used by monitor
 #
@@ -361,6 +372,7 @@
 #   Alessandro Franceschi <al@lab42.it/>
 #
 class puppet (
+  $enc_backup          = params_lookup( 'enc_backup' ),
   $mode                = params_lookup( 'mode' ),
   $server              = params_lookup( 'server' ),
   $environment         = params_lookup( 'environment' ),
@@ -377,7 +389,9 @@ class puppet (
   $croncommand         = params_lookup( 'croncommand' ),
   $prerun_command      = params_lookup( 'prerun_command' ),
   $postrun_command     = params_lookup( 'postrun_command' ),
+  $configtimeout       = params_lookup( 'configtimeout' ),
   $externalnodes       = params_lookup( 'externalnodes' ),
+  $external_nodes_script = params_lookup( 'external_nodes_script' ),
   $passenger           = params_lookup( 'passenger' ),
   $passenger_type      = params_lookup( 'passenger_type' ),
   $autosign            = params_lookup( 'autosign' ),
@@ -396,6 +410,7 @@ class puppet (
   $pid_file_server     = params_lookup( 'pid_file_server' ),
   $process_args_server = params_lookup( 'process_args_server' ),
   $process_user_server = params_lookup( 'process_user_server' ),
+  $process_group_server = params_lookup( 'process_group_server' ),
   $version_server      = params_lookup( 'version_server' ),
   $version_puppetdb_terminus  = params_lookup( 'version_puppetdb_terminus' ),
   $service_server_autorestart = params_lookup( 'service_server_autorestart' ),
@@ -448,9 +463,11 @@ class puppet (
   $config_file_owner   = params_lookup( 'config_file_owner' ),
   $config_file_group   = params_lookup( 'config_file_group' ),
   $config_file_init    = params_lookup( 'config_file_init' ),
+  $config_file_init_template = params_lookup ( 'config_file_init_template' ),
   $pid_file            = params_lookup( 'pid_file' ),
   $data_dir            = params_lookup( 'data_dir' ),
   $log_dir             = params_lookup( 'log_dir' ),
+  $log_dir_mode        = params_lookup( 'log_dir_mode' ),
   $log_file            = params_lookup( 'log_file' ),
   $port                = params_lookup( 'port' ),
   $http_proxy_host     = params_lookup( 'http_proxy_host' , 'global' ),
@@ -461,6 +478,7 @@ class puppet (
   $template_dir        = params_lookup( 'template_dir' )
   ) inherits puppet::params {
 
+  $bool_enc_backup=any2bool($enc_backup)
   $bool_listen=any2bool($listen)
   $bool_externalnodes=any2bool($externalnodes)
   $bool_passenger=any2bool($passenger)
@@ -493,6 +511,11 @@ class puppet (
       default  => 'puppet/passenger/puppet-passenger.conf.erb',
     },
     default => $puppet::template_passenger,
+  }
+
+  $real_external_nodes_script = $puppet::bool_enc_backup ? {
+    true  => '/etc/puppet/node.sh',
+    false => $external_nodes_script,
   }
 
   ### Definition of some variables used in the module
@@ -654,7 +677,12 @@ class puppet (
 
   $manage_log_dir_owner = $puppet::mode ? {
     server => $puppet::process_user_server,
-    client => $puppet::process_user,
+    client => undef,
+  }
+
+  $manage_log_dir_group = $puppet::mode ? {
+    server => $puppet::process_group_server,
+    client => undef,
   }
 
   $version_puppet = split($::puppetversion, '[.]')
@@ -677,12 +705,13 @@ class puppet (
   }
 
   if ($::operatingsystem == 'Ubuntu'
-  or $::operatingsystem == 'Debian') {
+  or $::operatingsystem == 'Debian'
+  or $::operatingsystem == 'SLES') {
     file { 'default-puppet':
       ensure  => $puppet::manage_file,
       path    => $puppet::config_file_init,
       require => Package[puppet],
-      content => template('puppet/default.init-ubuntu'),
+      content => template($puppet::config_file_init_template),
       mode    => $puppet::config_file_mode,
       owner   => $puppet::config_file_owner,
       group   => $puppet::config_file_group,
@@ -733,9 +762,9 @@ class puppet (
   file { 'puppet.log.dir':
     ensure  => $puppet::manage_directory,
     path    => $puppet::log_dir,
-    mode    => '0750',
+    mode    => $puppet::log_dir_mode,
     owner   => $puppet::manage_log_dir_owner,
-    group   => $puppet::manage_log_dir_owner,
+    group   => $puppet::manage_log_dir_group,
     require => Package['puppet'],
     audit   => $puppet::manage_audit,
   }
