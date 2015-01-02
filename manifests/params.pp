@@ -78,6 +78,7 @@ class puppet::params {
   $autosign = false
   $storeconfigs = true
   $storeconfigs_thin = true
+  $manage_rails = true
   $db = 'sqlite'
   $db_name = 'puppet'
   $db_server = $::fqdn
@@ -86,6 +87,8 @@ class puppet::params {
   $db_password = ''
   $inventoryserver = 'localhost'
   $reporturl = 'http://localhost:3000/reports'
+  $tagmail = false
+  $template_tagmail = ''
 
   $package_server = $::operatingsystem ? {
     /(?i:Debian|Ubuntu|Mint)/ => 'puppetmaster',
@@ -191,9 +194,10 @@ class puppet::params {
     default => true,
   }
 
-  $process = $major_version ? {
-    '0.2' => 'puppetd',
-    '2.x' => $::operatingsystem ? {
+  $process = $::puppetversion ? {
+    /(^0.)/ => 'puppetd',
+    /(^3.)/ => 'puppet',
+    default => $::operatingsystem ? {
       /(?i:RedHat|Centos|Scientific|Fedora|Linux)/ => 'puppetd',
       /(?i:Solaris)/                               => 'ruby18',
       default                                      => 'puppet',
@@ -304,8 +308,9 @@ class puppet::params {
 
   $manifest_path = '$confdir/manifests/site.pp'
   $module_path   = '/etc/puppet/modules:/usr/share/puppet/modules'
-  $template_dir  = '/var/lib/puppet/templates'
 
+  $reports_dir = '/var/lib/puppet/reports'
+  $reports_retention_age = '1w'
 
   # DB package resources
   $mysql_conn_package = $::operatingsystem ? {

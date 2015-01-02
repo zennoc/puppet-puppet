@@ -72,6 +72,8 @@
 #
 # [*storeconfigs_thin*]
 #
+# [*manage_rails*]
+#
 # [*db*]
 #
 # [*db_name*]
@@ -142,6 +144,10 @@
 # [*ssl_dir*]
 #
 # [*reporturl*]
+#
+# [*tagmail*]
+#
+# [*template_tagmail*]
 #
 # Extra Database settings
 #
@@ -355,9 +361,6 @@
 # [*module_path*]
 #   Location of the modules
 #
-# [*template_dir*]
-#   Location of the templates
-#
 #
 # == Examples
 #
@@ -398,6 +401,7 @@ class puppet (
   $autosign            = params_lookup( 'autosign' ),
   $storeconfigs        = params_lookup( 'storeconfigs' ),
   $storeconfigs_thin   = params_lookup( 'storeconfigs_thin' ),
+  $manage_rails        = params_lookup( 'manage_rails' ),
   $db                  = params_lookup( 'db' ),
   $db_name             = params_lookup( 'db_name' ),
   $db_server           = params_lookup( 'db_server' ),
@@ -429,6 +433,8 @@ class puppet (
   $run_dir             = params_lookup( 'run_dir' ),
   $ssl_dir             = params_lookup( 'ssl_dir' ),
   $reporturl           = params_lookup( 'reporturl' ),
+  $tagmail             = params_lookup( 'tagmail' ),
+  $template_tagmail    = params_lookup( 'template_tagmail' ),
   $my_class            = params_lookup( 'my_class' ),
   $source              = params_lookup( 'source' ),
   $source_dir          = params_lookup( 'source_dir' ),
@@ -477,7 +483,8 @@ class puppet (
   $protocol            = params_lookup( 'protocol' ),
   $manifest_path       = params_lookup( 'manifest_path' ),
   $module_path         = params_lookup( 'module_path' ),
-  $template_dir        = params_lookup( 'template_dir' )
+  $reports_dir         = params_lookup( 'reports_dir' ),
+  $reports_retention_age = params_lookup( 'reports_retention_age' ),
   ) inherits puppet::params {
 
   $bool_enc_backup=any2bool($enc_backup)
@@ -486,6 +493,7 @@ class puppet (
   $bool_passenger=any2bool($passenger)
   $bool_storeconfigs=any2bool($storeconfigs)
   $bool_storeconfigs_thin=any2bool($storeconfigs_thin)
+  $bool_manage_rails=any2bool($manage_rails)
   $bool_service_server_autorestart=any2bool($service_server_autorestart)
   $bool_source_dir_purge=any2bool($source_dir_purge)
   $bool_service_autorestart=any2bool($service_autorestart)
@@ -500,9 +508,18 @@ class puppet (
 
   $reports_value = $puppet::reports ? {
     '' => $puppet::nodetool ? {
-      'foreman'   => 'store,foreman',
-      'dashboard' => 'store,http',
-      default     => 'log',
+      'foreman'   => $puppet::tagmail ? {
+        true  => 'store,foreman,tagmail',
+        false => 'store,foreman',
+      },
+      'dashboard' => $puppet::tagmail ? {
+        true  => 'store,http,tagmail',
+        false => 'store,http',
+      },
+      default     => $puppet::tagmail ? {
+        true  => 'log,tagmail',
+        false => 'log',
+      },
     },
     default => $puppet::reports,
   }
@@ -589,7 +606,7 @@ class puppet (
   }
 
   $manage_service_autorestart = $puppet::bool_service_autorestart ? {
-    true    => 'Service[puppet]',
+    true    => Service[puppet],
     false   => undef,
   }
 
@@ -677,6 +694,16 @@ class puppet (
     default   => template($puppet::template_fileserver),
   }
 
+  $manage_file_tagmail = $puppet::tagmail ? {
+    true  => 'present',
+    false => 'absent',
+  }
+
+  $manage_file_tagmail_content = $puppet::template_tagmail ? {
+    ''      => '',
+    default => template($puppet::template_tagmail),
+  }
+
   $manage_log_dir_owner = $puppet::mode ? {
     server => $puppet::process_user_server,
     client => undef,
@@ -757,6 +784,19 @@ class puppet (
     require => Package['puppet'],
     notify  => $puppet::manage_service_autorestart,
     content => $puppet::manage_file_auth_content,
+    replace => $puppet::manage_file_replace,
+    audit   => $puppet::manage_audit,
+  }
+
+  file { 'tagmail.conf':
+    ensure  => $puppet::manage_file_tagmail,
+    path    => "${puppet::config_dir}/tagmail.conf",
+    mode    => $puppet::config_file_mode,
+    owner   => $puppet::config_file_owner,
+    group   => $puppet::config_file_group,
+    require => Package['puppet'],
+    notify  => $puppet::manage_service_autorestart,
+    content => $puppet::manage_file_tagmail_content,
     replace => $puppet::manage_file_replace,
     audit   => $puppet::manage_audit,
   }

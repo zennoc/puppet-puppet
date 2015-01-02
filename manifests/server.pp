@@ -97,7 +97,7 @@ class puppet::server inherits puppet {
   }
 
   ### Rails required when storeconfigs activated
-  if $puppet::bool_storeconfigs == true { include puppet::rails }
+  if $puppet::bool_storeconfigs == true and $puppet::manage_bool_rails { include puppet::rails }
 
   ### Manage database for storeconfigs
   case $puppet::db {
@@ -109,4 +109,13 @@ class puppet::server inherits puppet {
   ### Manage Passenger
   if $puppet::bool_passenger == true { include puppet::server::passenger }
 
+  ### remove stored reports after a week
+  if $puppet::nodetool == "foreman" or $puppet::nodetool == "dashboard" {
+    tidy { $puppet::reports_dir:
+      age     => $puppet::reports_retention_age,
+      recurse => true,
+      rmdirs  => true,
+      type    => ctime;
+    }
+  }
 }
